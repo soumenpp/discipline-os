@@ -16,7 +16,19 @@ step()  { echo -e "\n${BOLD}━━━ $1 ━━━${NC}"; }
 if [[ $EUID -ne 0 ]]; then err "Please run as root (sudo)."; fi
 
 # ── 1. Detect project root ─────────────────────────────────
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Works both when run directly and when piped via curl
+if [[ -n "${BASH_SOURCE:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    # Piped mode — clone the repo
+    REPO_URL="https://github.com/soumenpp/discipline-os.git"
+    TARGET_DIR="/root/discipline-os"
+    info "Fresh install — cloning from $REPO_URL"
+    git clone --depth=1 "$REPO_URL" "$TARGET_DIR" 2>/dev/null || {
+        warn "$TARGET_DIR already exists — using it"
+    }
+    PROJECT_DIR="$TARGET_DIR"
+fi
 cd "$PROJECT_DIR"
 info "Project: $PROJECT_DIR"
 

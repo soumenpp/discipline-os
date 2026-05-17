@@ -4,14 +4,17 @@ AI-powered habit tracker & task manager with Telegram check-ins.
 
 ## 🚀 Quick Start (Fresh Server)
 
+**One-line install:**
 ```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USER/discipline-os.git
-cd discipline-os
+bash <(curl -sL https://raw.githubusercontent.com/soumenpp/discipline-os/master/setup.sh)
+```
 
-# 2. Run setup
+Or clone + run:
+```bash
+git clone https://github.com/soumenpp/discipline-os.git
+cd discipline-os
 chmod +x setup.sh
-./setup.sh
+sudo ./setup.sh
 ```
 
 The setup script will:
