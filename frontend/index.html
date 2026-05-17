@@ -1,0 +1,3098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discipline OS — Habit Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #2a2a3a;
+    --accent: #e8ff47;
+    --accent2: #ff4f7b;
+    --accent3: #47c8ff;
+    --accent4: #c47bff;
+    --text: #f0f0f8;
+    --muted: #6b6b80;
+    --success: #47ffb2;
+    --warn: #ffb347;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 0 0 100px 0; }
+
+  /* HEADER */
+  .header {
+    padding: 36px 24px 24px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .header-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .header-title span { color: var(--accent); }
+  .header-date {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* SCORE RING */
+  .score-section {
+    padding: 28px 24px 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ring-wrap {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+  }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--border); stroke-width: 7; }
+  .ring-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 7;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1);
+    filter: drop-shadow(0 0 8px #e8ff4766);
+  }
+  .ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .ring-score { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .ring-total { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted); }
+  .score-info { flex: 1; }
+  .score-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .score-bar-wrap { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; }
+  .score-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    border-radius: 99px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+  .streak-row { display: flex; gap: 12px; margin-top: 12px; }
+  .streak-chip {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .streak-chip b { color: var(--warn); }
+
+  /* NAV TABS */
+  .tabs {
+    display: flex;
+    padding: 0 24px;
+    gap: 4px;
+    margin: 20px 0 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 8px 16px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .tab.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .tab:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+  /* MODULE PANELS */
+  .panel { display: none; padding: 20px 24px 0; animation: fadeUp 0.3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* HABIT CARD */
+  .habit-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .habit-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .habit-card.done::before { opacity: 1; }
+  .habit-card.done { border-color: #2a2a1a; background: #14140e; }
+
+  .habit-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .habit-icon {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .habit-meta { flex: 1; }
+  .habit-name { font-size: 15px; font-weight: 700; }
+  .habit-desc { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .habit-streak {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--warn);
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .habit-btns { display: flex; gap: 8px; }
+  .btn-yes, .btn-no {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 700;
+  }
+  .btn-yes { color: var(--success); }
+  .btn-yes:hover, .btn-yes.active { background: var(--success); color: #000; border-color: var(--success); }
+  .btn-no { color: var(--accent2); }
+  .btn-no:hover, .btn-no.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+  /* INPUT HABIT */
+  .btn-note {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.15s;
+  }
+  .btn-note:hover { border-color: var(--accent4); color: var(--accent4); }
+  .note-input {
+    display: none;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    resize: none;
+    margin-top: 8px;
+    outline: none;
+  }
+  .note-input:focus { border-color: var(--accent4); }
+
+  /* SECTION HEADER */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .section-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* SADHANA MODULE */
+  .sadhana-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 12px;
+  }
+  .sadhana-top { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .sadhana-icon { font-size: 24px; }
+  .sadhana-title { font-size: 16px; font-weight: 700; }
+  .sadhana-sub { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent4); margin-top: 2px; }
+
+  .counter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .counter-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); flex: 1; }
+  .counter-ctrl { display: flex; align-items: center; gap: 8px; }
+  .c-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .c-btn:hover { border-color: var(--accent4); color: var(--accent4); }
+  .c-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent4);
+    min-width: 40px;
+    text-align: center;
+  }
+  .c-target { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  .mini-progress { background: var(--border); border-radius: 99px; height: 4px; overflow: hidden; margin-top: 4px; }
+  .mini-bar { height: 100%; background: var(--accent4); border-radius: 99px; transition: width 0.5s ease; }
+
+  .mantra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .mantra-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mantra-chip.active { border-color: var(--accent4); background: #1a103a; }
+  .mantra-chip .m-name { font-size: 12px; font-weight: 700; }
+  .mantra-chip .m-count { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent4); margin-top: 2px; }
+
+  /* TRADING MODULE */
+  .trade-metric {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 12px;
+  }
+  .trade-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .trade-verdict {
+    padding: 4px 14px;
+    border-radius: 99px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .trade-verdict.go { background: #0a1f12; border-color: var(--success); color: var(--success); }
+  .trade-verdict.no { background: #1f0a0a; border-color: var(--accent2); color: var(--accent2); }
+
+  .trade-row { display: flex; align-items: center; margin-bottom: 12px; gap: 10px; }
+  .trade-row label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); flex: 1; }
+  .toggle-wrap { display: flex; gap: 6px; }
+  .tgl {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .tgl.on { background: #0a1f12; border-color: var(--success); color: var(--success); }
+  .tgl.off { background: #1f0a0a; border-color: var(--accent2); color: var(--accent2); }
+
+  .rr-input {
+    width: 70px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--accent3);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    text-align: center;
+    outline: none;
+  }
+  .rr-input:focus { border-color: var(--accent3); }
+
+  /* STATS / HISTORY */
+  .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 20px; }
+  .day-cell {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .day-cell .d-label { font-family: 'Space Mono', monospace; font-size: 8px; color: var(--muted); }
+  .day-cell .d-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .day-cell.full { background: #141f00; border-color: var(--accent); }
+  .day-cell.partial { background: #1a1200; border-color: var(--warn); }
+  .day-cell.zero { background: var(--surface); }
+  .day-cell.today { box-shadow: 0 0 0 2px var(--accent3); }
+
+  .stat-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .stat-box {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-val { font-size: 24px; font-weight: 800; color: var(--accent); }
+  .stat-name { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 12px 24px 20px;
+    gap: 4px;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+  .nav-btn.active { color: var(--accent); background: rgba(232,255,71,0.07); }
+  .nav-icon { font-size: 20px; line-height: 1; }
+  .nav-label { font-family: 'Space Mono', monospace; font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s;
+    z-index: 200;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* SLEEP MODULE */
+  .sleep-hero {
+    background: linear-gradient(135deg, #0d0d2b 0%, #1a0a2e 100%);
+    border: 1px solid #2a1a4a;
+    border-radius: 20px;
+    padding: 28px 20px;
+    text-align: center;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .sleep-hero::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, #c47bff22, transparent 70%);
+    border-radius: 50%;
+  }
+  .moon-icon { font-size: 44px; margin-bottom: 10px; filter: drop-shadow(0 0 16px #c47bff88); }
+  .sleep-status { font-size: 13px; color: var(--muted); font-family: 'Space Mono', monospace; letter-spacing: 2px; margin-bottom: 6px; }
+  .sleep-countdown { font-size: 36px; font-weight: 800; color: var(--accent4); letter-spacing: -1px; }
+  .sleep-sub { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+  .time-setter {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 12px;
+  }
+  .time-setter-top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .time-setter-icon { font-size: 22px; }
+  .time-setter-title { font-size: 15px; font-weight: 700; }
+  .time-setter-sub { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .time-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .time-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .time-arrow {
+    width: 44px; height: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .time-arrow:hover { border-color: var(--accent4); color: var(--accent4); }
+  .time-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    min-width: 64px;
+    text-align: center;
+  }
+  .time-sep { font-size: 36px; font-weight: 700; color: var(--muted); padding-bottom: 4px; }
+  .ampm-col { display: flex; flex-direction: column; gap: 6px; margin-left: 6px; }
+  .ampm-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .ampm-btn.active { background: #1a103a; border-color: var(--accent4); color: var(--accent4); }
+
+  .sleep-hours-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .sleep-hours-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); flex: 1; }
+  .sleep-hours-btns { display: flex; gap: 6px; }
+  .sh-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .sh-btn.active { background: #0a1f12; border-color: var(--success); color: var(--success); }
+
+  .bedtime-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #0d0d2b;
+    border: 1px solid #2a1a4a;
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+  .bedtime-label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .bedtime-time { font-size: 22px; font-weight: 800; color: var(--accent4); }
+
+  .alarm-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .alarm-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: border-color 0.2s;
+  }
+  .alarm-item.armed { border-color: #2a1f00; background: #14120a; }
+  .alarm-item.armed .alarm-time { color: var(--warn); }
+  .alarm-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .alarm-dot.on { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .alarm-info { flex: 1; }
+  .alarm-time { font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700; line-height: 1; }
+  .alarm-label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .alarm-toggle {
+    width: 44px; height: 24px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .alarm-toggle.on { background: var(--warn); border-color: var(--warn); }
+  .alarm-toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .alarm-toggle.on::after { transform: translateX(20px); }
+
+  .sleep-tip {
+    background: var(--surface);
+    border-left: 3px solid var(--accent4);
+    border-radius: 0 10px 10px 0;
+    padding: 12px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .sleep-tip b { color: var(--accent4); }
+
+  /* ADD MODULE */
+  .add-module {
+    background: var(--card);
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .add-module:hover { border-color: var(--accent4); }
+  .add-module .plus { font-size: 28px; color: var(--muted); margin-bottom: 8px; }
+  .add-module p { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  /* CUSTOM HABIT MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 300;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    padding: 28px 24px 40px;
+    width: 100%;
+    max-width: 480px;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+  .modal-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .emoji-opt {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .emoji-opt.sel { border-color: var(--accent); background: #1a1f00; }
+  .btn-add-confirm {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-add-confirm:hover { opacity: 0.85; }
+  .btn-cancel { width: 100%; padding: 12px; background: none; border: none; color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px; cursor: pointer; margin-top: 8px; }
+
+  /* ── FINANCE MODULE ─────────────────────────────────── */
+  .fin-hero {
+    background: linear-gradient(135deg, #0a1a0f 0%, #071a10 100%);
+    border: 1px solid #1a3a20;
+    border-radius: 20px;
+    padding: 24px 20px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .fin-hero::before {
+    content: '';
+    position: absolute;
+    bottom: -30px; right: -30px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, #47ffb222, transparent 70%);
+    border-radius: 50%;
+  }
+  .fin-month { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-bottom: 4px; }
+  .fin-balance { font-size: 38px; font-weight: 800; color: var(--success); line-height: 1; }
+  .fin-balance.negative { color: var(--accent2); }
+  .fin-sublabel { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .fin-row { display: flex; gap: 10px; margin-top: 16px; }
+  .fin-pill {
+    flex: 1;
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .fin-pill-label { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 3px; }
+  .fin-pill-val { font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; }
+
+  .fin-bar-wrap { margin-top: 14px; }
+  .fin-bar-label { display: flex; justify-content: space-between; font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted); margin-bottom: 5px; }
+  .fin-bar-bg { background: rgba(0,0,0,0.4); border-radius: 99px; height: 8px; overflow: hidden; }
+  .fin-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+
+  .fin-section { padding: 0 24px; margin-bottom: 20px; }
+  .fin-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .fin-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fin-card-title { font-size: 13px; font-weight: 700; }
+  .fin-card-sub { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .fin-add-btn {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .fin-add-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  .fin-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .fin-item:last-child { border-bottom: none; }
+  .fin-item:hover { background: var(--surface); }
+  .fin-item-icon {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .fin-item-info { flex: 1; min-width: 0; }
+  .fin-item-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fin-item-meta { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .fin-item-amt { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .fin-item-del {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .fin-item-del:hover { color: var(--accent2); background: #1f0a0a; }
+
+  .fin-empty {
+    padding: 20px 16px;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .fin-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 0 24px;
+    margin-bottom: 16px;
+  }
+  .fin-summary-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+  }
+  .fin-summary-val { font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700; }
+  .fin-summary-name { font-family: 'Space Mono', monospace; font-size: 8px; color: var(--muted); margin-top: 3px; text-transform: uppercase; }
+
+  .fin-cat-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .budget-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .budget-input-row label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); flex: 1; }
+  .budget-input {
+    width: 110px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--success);
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    text-align: right;
+    outline: none;
+  }
+  .budget-input:focus { border-color: var(--success); }
+
+  /* ── AI CHAT + TASKS ──────────────────────────────── */
+  .ai-wrap { display:flex; flex-direction:column; height:calc(100vh - 220px); padding:0 0 0; }
+  .ai-messages {
+    flex:1; overflow-y:auto; padding:16px 24px;
+    display:flex; flex-direction:column; gap:12px;
+    scrollbar-width:thin; scrollbar-color: var(--border) transparent;
+  }
+  .ai-bubble {
+    max-width:85%; padding:12px 16px; border-radius:16px;
+    font-size:13px; line-height:1.55; animation: fadeUp 0.2s ease;
+  }
+  .ai-bubble.user {
+    align-self:flex-end;
+    background:var(--accent); color:#000; border-radius:16px 16px 4px 16px;
+    font-weight:600;
+  }
+  .ai-bubble.assistant {
+    align-self:flex-start;
+    background:var(--card); color:var(--text); border:1px solid var(--border);
+    border-radius:16px 16px 16px 4px;
+  }
+  .ai-bubble.assistant .ai-name {
+    font-family:'Space Mono',monospace; font-size:9px; color:var(--accent4);
+    letter-spacing:1px; margin-bottom:5px;
+  }
+  .ai-bubble.thinking { opacity:0.5; font-style:italic; }
+  .ai-input-row {
+    display:flex; gap:8px; padding:12px 24px 16px;
+    border-top:1px solid var(--border); background:var(--bg);
+  }
+  .ai-input {
+    flex:1; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:12px 14px; color:var(--text);
+    font-family:'Syne',sans-serif; font-size:13px; outline:none; resize:none;
+    max-height:80px; min-height:44px;
+  }
+  .ai-input:focus { border-color:var(--accent4); }
+  .ai-send {
+    width:44px; height:44px; border-radius:12px; border:none;
+    background:var(--accent4); color:#fff; font-size:18px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:opacity 0.15s; flex-shrink:0;
+  }
+  .ai-send:hover { opacity:0.8; }
+  .ai-send:disabled { opacity:0.3; cursor:not-allowed; }
+
+  .ai-quick-btns {
+    display:flex; gap:6px; padding:0 24px 10px; overflow-x:auto; scrollbar-width:none;
+  }
+  .ai-quick-btns::-webkit-scrollbar { display:none; }
+  .ai-quick {
+    white-space:nowrap; padding:6px 12px; border-radius:99px;
+    border:1px solid var(--border); background:var(--surface);
+    font-family:'Space Mono',monospace; font-size:10px; color:var(--muted);
+    cursor:pointer; transition:all 0.15s; flex-shrink:0;
+  }
+  .ai-quick:hover { border-color:var(--accent4); color:var(--accent4); }
+
+  /* Tasks */
+  .task-item {
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px; border-bottom:1px solid var(--border);
+    transition:background 0.15s;
+  }
+  .task-item:last-child { border-bottom:none; }
+  .task-check {
+    width:22px; height:22px; border-radius:6px; flex-shrink:0;
+    border:2px solid var(--border); background:transparent;
+    cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:center;
+  }
+  .task-check.done { background:var(--success); border-color:var(--success); }
+  .task-check.done::after { content:'✓'; color:#000; font-size:12px; font-weight:800; }
+  .task-check.inprogress { background:var(--warn); border-color:var(--warn); }
+  .task-check.inprogress::after { content:'●'; color:#000; font-size:10px; }
+  .task-info { flex:1; min-width:0; }
+  .task-title {
+    font-size:13px; font-weight:600;
+    text-decoration:none; color:var(--text);
+  }
+  .task-title.done { text-decoration:line-through; color:var(--muted); }
+  .task-meta { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); margin-top:2px; }
+  .task-pri {
+    font-family:'Space Mono',monospace; font-size:9px; padding:2px 7px;
+    border-radius:99px; flex-shrink:0;
+  }
+  .task-pri.high   { background:#1f0a0a; color:var(--accent2); border:1px solid var(--accent2)44; }
+  .task-pri.medium { background:#1a1200; color:var(--warn);    border:1px solid var(--warn)44; }
+  .task-pri.low    { background:#0a1a0a; color:var(--success); border:1px solid var(--success)44; }
+  .task-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; flex-shrink:0; padding:4px; }
+  .task-del:hover { color:var(--accent2); }
+
+  .push-banner {
+    margin:16px 24px 0;
+    background:linear-gradient(135deg,#1a103a,#0f0a2a);
+    border:1px solid #2a1a4a; border-radius:14px;
+    padding:14px 16px; display:flex; align-items:center; gap:12px;
+  }
+  .push-banner-text { flex:1; font-size:12px; line-height:1.5; }
+  .push-banner-text b { color:var(--accent4); }
+  .push-enable-btn {
+    padding:8px 14px; border-radius:10px; border:none;
+    background:var(--accent4); color:#fff; font-family:'Space Mono',monospace;
+    font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap;
+    transition:opacity 0.15s;
+  }
+  .push-enable-btn:hover { opacity:0.8; }
+  .push-enable-btn.enabled { background:var(--success); color:#000; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="header-label">DISCIPLINE OS v1.0</div>
+        <div class="header-title">HABIT <span>TRACKER</span></div>
+        <div class="header-date" id="headerDate">—</div>
+      </div>
+      <button onclick="if(confirm('Logout?'))logout()" style="
+        background:var(--surface);border:1px solid var(--border);border-radius:10px;
+        padding:8px 14px;color:var(--muted);font-family:'Space Mono',monospace;
+        font-size:10px;cursor:pointer;letter-spacing:1px;
+      ">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- SCORE -->
+  <div class="score-section">
+    <div class="ring-wrap">
+      <svg width="90" height="90" viewBox="0 0 90 90">
+        <circle class="ring-bg" cx="45" cy="45" r="37"/>
+        <circle class="ring-fill" id="ringFill" cx="45" cy="45" r="37"
+          stroke-dasharray="232.5" stroke-dashoffset="232.5"/>
+      </svg>
+      <div class="ring-text">
+        <div class="ring-score" id="ringScore">0</div>
+        <div class="ring-total" id="ringTotal">/10</div>
+      </div>
+    </div>
+    <div class="score-info">
+      <div class="score-label">Today's Discipline Score</div>
+      <div class="score-bar-wrap"><div class="score-bar" id="scoreBar" style="width:0%"></div></div>
+      <div class="streak-row">
+        <div class="streak-chip">🔥 Streak <b id="streakDays">0</b>d</div>
+        <div class="streak-chip">✅ Done <b id="doneTasks">0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" id="tabBar"></div>
+
+  <!-- PANELS -->
+  <div id="panelsContainer"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-btn active" onclick="showSection('today')">
+    <div class="nav-icon">⚡</div>
+    <div class="nav-label">Today</div>
+  </button>
+  <button class="nav-btn" onclick="showSection('ai')">
+    <div class="nav-icon">🤖</div>
+    <div class="nav-label">AI Coach</div>
+  </button>
+  <button class="nav-btn" onclick="showSection('finance')">
+    <div class="nav-icon">💰</div>
+    <div class="nav-label">Finance</div>
+  </button>
+  <button class="nav-btn" onclick="showSection('stats')">
+    <div class="nav-icon">📊</div>
+    <div class="nav-label">Stats</div>
+  </button>
+  <button class="nav-btn" onclick="showSection('settings')">
+    <div class="nav-icon">⚙️</div>
+    <div class="nav-label">Config</div>
+  </button>
+</div>
+
+<!-- ADD HABIT MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-title">Add New Habit</div>
+    <input class="modal-input" id="newHabitName" placeholder="Habit name (e.g. Cold shower)">
+    <input class="modal-input" id="newHabitDesc" placeholder="Short description">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:8px;">CHOOSE ICON</div>
+    <div class="emoji-grid" id="emojiGrid"></div>
+    <button class="btn-add-confirm" onclick="confirmAddHabit()">ADD HABIT</button>
+    <button class="btn-cancel" onclick="closeModal()">CANCEL</button>
+  </div>
+</div>
+
+<!-- FINANCE: ADD INCOME MODAL -->
+<div class="modal-overlay" id="incomeModal">
+  <div class="modal">
+    <div class="modal-title">💵 Add Income</div>
+    <input class="modal-input" id="incomeLabel" placeholder="Source (e.g. Salary, Freelance)">
+    <input class="modal-input" id="incomeAmt" type="number" placeholder="Amount (₹)">
+    <select class="modal-input" id="incomeFreq" style="appearance:none;cursor:pointer">
+      <option value="monthly">Monthly (recurring)</option>
+      <option value="once">One-time</option>
+    </select>
+    <button class="btn-add-confirm" onclick="confirmAddIncome()">ADD INCOME</button>
+    <button class="btn-cancel" onclick="closeFinanceModal('incomeModal')">CANCEL</button>
+  </div>
+</div>
+
+<!-- FINANCE: ADD FIXED EXPENSE MODAL -->
+<div class="modal-overlay" id="fixedModal">
+  <div class="modal">
+    <div class="modal-title">📌 Add Fixed Expense</div>
+    <input class="modal-input" id="fixedLabel" placeholder="Name (e.g. Netflix, Server, Rent)">
+    <input class="modal-input" id="fixedAmt" type="number" placeholder="Amount (₹)">
+    <select class="modal-input" id="fixedCat" style="appearance:none;cursor:pointer">
+      <option value="subscription">Subscription</option>
+      <option value="family">Family</option>
+      <option value="server">Server / Tech</option>
+      <option value="emi">EMI / Loan</option>
+      <option value="rent">Rent / Utilities</option>
+      <option value="other">Other</option>
+    </select>
+    <button class="btn-add-confirm" onclick="confirmAddFixed()">ADD EXPENSE</button>
+    <button class="btn-cancel" onclick="closeFinanceModal('fixedModal')">CANCEL</button>
+  </div>
+</div>
+
+<!-- FINANCE: LOG DAILY EXPENSE MODAL -->
+<div class="modal-overlay" id="dailyModal">
+  <div class="modal">
+    <div class="modal-title">🧾 Log Expense</div>
+    <input class="modal-input" id="dailyLabel" placeholder="What did you spend on?">
+    <input class="modal-input" id="dailyAmt" type="number" placeholder="Amount (₹)" onkeydown="if(event.key==='Enter')confirmAddDaily()">
+    <select class="modal-input" id="dailyCat" style="appearance:none;cursor:pointer">
+      <option value="food">🍱 Food</option>
+      <option value="transport">🚗 Transport</option>
+      <option value="shopping">🛍️ Shopping</option>
+      <option value="health">💊 Health</option>
+      <option value="entertainment">🎬 Entertainment</option>
+      <option value="misc">📦 Misc</option>
+    </select>
+    <button class="btn-add-confirm" onclick="confirmAddDaily()">LOG IT</button>
+    <button class="btn-cancel" onclick="closeFinanceModal('dailyModal')">CANCEL</button>
+  </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="
+  position:fixed;inset:0;background:var(--bg);z-index:9999;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;
+">
+  <div style="width:100%;max-width:360px;padding:32px 28px;">
+    <div style="text-align:center;margin-bottom:36px;">
+      <div style="font-size:42px;margin-bottom:12px;">🔱</div>
+      <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">DISCIPLINE OS</div>
+      <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:3px;margin-top:6px;">YOUR PERSONAL COMMAND CENTER</div>
+    </div>
+
+    <!-- Tab toggle -->
+    <div style="display:flex;background:var(--surface);border-radius:12px;padding:4px;margin-bottom:24px;border:1px solid var(--border);">
+      <button id="tabLogin" onclick="switchAuthTab('login')" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;">LOGIN</button>
+      <button id="tabRegister" onclick="switchAuthTab('register')" style="flex:1;padding:10px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.2s;">REGISTER</button>
+    </div>
+
+    <div id="authError" style="display:none;background:#1f0a0a;border:1px solid var(--accent2);border-radius:10px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2);margin-bottom:14px;"></div>
+
+    <input id="authUser" type="text" placeholder="Username" autocomplete="username" style="
+      width:100%;background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;padding:14px 16px;color:var(--text);
+      font-family:'Syne',sans-serif;font-size:14px;outline:none;margin-bottom:10px;
+      box-sizing:border-box;
+    " onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+    <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" style="
+      width:100%;background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;padding:14px 16px;color:var(--text);
+      font-family:'Syne',sans-serif;font-size:14px;outline:none;margin-bottom:20px;
+      box-sizing:border-box;
+    " onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+    onkeydown="if(event.key==='Enter')doAuth()">
+
+    <button onclick="doAuth()" id="authBtn" style="
+      width:100%;padding:16px;border-radius:12px;border:none;
+      background:var(--accent);color:#000;font-family:'Syne',sans-serif;
+      font-size:15px;font-weight:800;cursor:pointer;transition:opacity 0.15s;
+    ">LOGIN →</button>
+
+    <div style="text-align:center;margin-top:16px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);">
+      Data synced securely to your server
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// API LAYER — connects to FastAPI backend
+// ═══════════════════════════════════════════════════════
+const API = window.location.origin;  // FastAPI serves everything on same port
+
+let authToken = localStorage.getItem('dos_token') || null;
+let authUser  = localStorage.getItem('dos_user')  || null;
+let authTab   = 'login';
+let syncTimer = null;
+
+function switchAuthTab(tab) {
+  authTab = tab;
+  const isLogin = tab === 'login';
+  document.getElementById('tabLogin').style.background    = isLogin ? 'var(--accent)' : 'transparent';
+  document.getElementById('tabLogin').style.color         = isLogin ? '#000' : 'var(--muted)';
+  document.getElementById('tabRegister').style.background = !isLogin ? 'var(--accent)' : 'transparent';
+  document.getElementById('tabRegister').style.color      = !isLogin ? '#000' : 'var(--muted)';
+  document.getElementById('authBtn').textContent          = isLogin ? 'LOGIN →' : 'CREATE ACCOUNT →';
+  document.getElementById('authError').style.display     = 'none';
+}
+
+async function doAuth() {
+  const username = document.getElementById('authUser').value.trim();
+  const password = document.getElementById('authPass').value;
+  const errEl    = document.getElementById('authError');
+  errEl.style.display = 'none';
+
+  if (!username || !password) {
+    errEl.textContent = '⚠️ Enter username and password';
+    errEl.style.display = 'block'; return;
+  }
+
+  const btn = document.getElementById('authBtn');
+  btn.textContent = '...'; btn.disabled = true;
+
+  try {
+    const endpoint = authTab === 'login' ? '/login' : '/register';
+    const res = await fetch(API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Auth failed');
+
+    authToken = data.token;
+    authUser  = data.username;
+    localStorage.setItem('dos_token', authToken);
+    localStorage.setItem('dos_user',  authUser);
+
+    // Load server data
+    await loadFromServer();
+    document.getElementById('loginScreen').style.display = 'none';
+    renderAll();
+    startAutoSync();
+  } catch(e) {
+    errEl.textContent = '❌ ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = authTab === 'login' ? 'LOGIN →' : 'CREATE ACCOUNT →';
+  }
+}
+
+async function loadFromServer() {
+  try {
+    const res = await fetch(API + '/data', {
+      headers: { 'Authorization': 'Bearer ' + authToken }
+    });
+    if (res.status === 401) { logout(); return; }
+    const json = await res.json();
+    if (json.data) {
+      // Merge server data into state (server wins)
+      Object.assign(state, json.data);
+      // Ensure migrations
+      if (!state.sleepConfig) state.sleepConfig = DEFAULT_STATE().sleepConfig;
+      if (!state.nofap) state.nofap = { startDate: null, relapses: [], urgeLog: [] };
+      localStorage.setItem('disciplineOS', JSON.stringify(state));
+    }
+  } catch(e) { console.warn('Load from server failed:', e); }
+}
+
+async function saveToServer() {
+  if (!authToken) return;
+  try {
+    await fetch(API + '/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + authToken
+      },
+      body: JSON.stringify({ data: state })
+    });
+  } catch(e) { console.warn('Save to server failed:', e); }
+}
+
+// Auto-sync every 60 seconds + on every saveState call
+function startAutoSync() {
+  if (syncTimer) clearInterval(syncTimer);
+  syncTimer = setInterval(saveToServer, 60000);
+}
+
+function logout() {
+  localStorage.removeItem('dos_token');
+  localStorage.removeItem('dos_user');
+  authToken = null; authUser = null;
+  if (syncTimer) clearInterval(syncTimer);
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+// Check if already logged in on page load
+async function initAuth() {
+  if (authToken) {
+    try {
+      await loadFromServer();
+      document.getElementById('loginScreen').style.display = 'none';
+      startAutoSync();
+    } catch(e) {
+      logout();
+    }
+  }
+}
+// ═══════════════════════════════════════════════════════
+// ===== STATE =====
+const EMOJIS = ['💪','🥗','🧘','🏃','📚','💊','🎯','💤','🧠','🔥','🌅','🚿','🎸','✍️','🏋️'];
+let selectedEmoji = '🎯';
+let currentSection = 'today';
+let activeTab = null;
+
+const DEFAULT_STATE = () => ({
+  habits: [
+    { id: 'protein', name: 'Protein Intake', desc: 'High protein diet', icon: '🥗', color: '#47ffb2', inverted: false, val: null, note: '', streak: 0 },
+    { id: 'workout', name: 'Workout', desc: 'Physical training', icon: '💪', color: '#ffb347', inverted: false, val: null, note: '', streak: 0 },
+    { id: 'junk',    name: 'No Junk Food', desc: 'Clean eating', icon: '🍽️', color: '#ff4f7b', inverted: true,  val: null, note: '', streak: 0 },
+    { id: 'sleep',   name: 'Sleep 8h', desc: 'Bedtime by 10pm', icon: '💤', color: '#47c8ff', inverted: false, val: null, note: '', streak: 0 },
+  ],
+  sadhana: {
+    japa: { count: 0, target: 108, done: false },
+    dhyana: { mins: 0, target: 30, done: false },
+    pranayam: { done: false },
+    mantra: { selected: null }
+  },
+  trading: {
+    sl: null,
+    emotion: null,
+    rr: '',
+    verdict: null
+  },
+  sleepConfig: {
+    wakeHour: 4,
+    wakeMin: 30,
+    wakeAmpm: 'AM',
+    sleepHours: 7,
+    alarms: [
+      { id: 'wake', label: '⏰ WAKE UP', enabled: true },
+      { id: 'bed',  label: '🛌 GO TO BED', enabled: true },
+      { id: 'warn', label: '⚠️ 30 MIN TO BEDTIME', enabled: true },
+    ]
+  },
+  log: {}
+});
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('disciplineOS');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return DEFAULT_STATE();
+}
+
+function saveState() {
+  localStorage.setItem('disciplineOS', JSON.stringify(state));
+  saveToServer();  // non-blocking push to server
+}
+
+let state = loadState();
+
+// Ensure today's log
+function getTodayKey() {
+  return new Date().toISOString().split('T')[0];
+}
+function ensureToday() {
+  const k = getTodayKey();
+  if (!state.log[k]) {
+    state.log[k] = {
+      habits: {},
+      sadhana: JSON.parse(JSON.stringify(DEFAULT_STATE().sadhana)),
+      trading: JSON.parse(JSON.stringify(DEFAULT_STATE().trading))
+    };
+    saveState();
+  }
+  return state.log[k];
+}
+
+// ===== SCORE =====
+function calcScore(dayLog) {
+  if (!dayLog) return { score: 0, total: 0 };
+  let total = 0, score = 0;
+
+  // Habits
+  state.habits.forEach(h => {
+    total++;
+    const v = dayLog.habits[h.id];
+    if (v === true) score += h.inverted ? 0 : 1;
+    if (v === false) score += h.inverted ? 1 : 0;
+  });
+
+  // Sadhana sub-scores
+  total += 3;
+  const s = dayLog.sadhana;
+  if (s.japa.done) score++;
+  if (s.dhyana.done) score++;
+  if (s.pranayam.done) score++;
+
+  // Trading
+  total += 1;
+  if (dayLog.trading.verdict === 'GO' || dayLog.trading.verdict === 'NO') score++;
+
+  return { score, total };
+}
+
+function updateScoreUI() {
+  const today = ensureToday();
+  const { score, total } = calcScore(today);
+  const pct = total > 0 ? score / total : 0;
+  const circ = 232.5;
+  document.getElementById('ringScore').textContent = score;
+  document.getElementById('ringTotal').textContent = `/${total}`;
+  document.getElementById('ringFill').style.strokeDashoffset = circ - circ * pct;
+  document.getElementById('scoreBar').style.width = (pct * 100) + '%';
+
+  // Done tasks
+  let done = 0;
+  state.habits.forEach(h => {
+    if (today.habits[h.id] !== undefined && today.habits[h.id] !== null) done++;
+  });
+  document.getElementById('doneTasks').textContent = done;
+
+  // Streak (simple: consecutive days with score > 0)
+  let streak = 0;
+  const today_k = getTodayKey();
+  let d = new Date();
+  for (let i = 0; i < 30; i++) {
+    const k = d.toISOString().split('T')[0];
+    const log = state.log[k];
+    if (log) {
+      const {score: s} = calcScore(log);
+      if (s > 0) streak++;
+      else if (i > 0) break;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  document.getElementById('streakDays').textContent = streak;
+}
+
+// ===== RENDER =====
+function renderAll() {
+  renderTabs();
+  renderPanels();
+  updateScoreUI();
+}
+
+// Modules config
+const MODULES = [
+  { id: 'habits',  label: 'HABITS',   icon: '⚡' },
+  { id: 'tasks',   label: 'TASKS',    icon: '📋' },
+  { id: 'sadhana', label: 'SADHANA',  icon: '🔱' },
+  { id: 'trading', label: 'TRADING',  icon: '📈' },
+  { id: 'sleep',   label: 'SLEEP',    icon: '🌙' },
+  { id: 'nofap',   label: 'BRAHMA',   icon: '🛡️' },
+];
+
+function renderTabs() {
+  const bar = document.getElementById('tabBar');
+  if (currentSection !== 'today') { bar.innerHTML = ''; return; }
+  bar.innerHTML = MODULES.map((m, i) => `
+    <button class="tab ${activeTab === m.id || (activeTab === null && i === 0) ? 'active' : ''}"
+      onclick="switchTab('${m.id}')">${m.icon} ${m.label}</button>
+  `).join('');
+  if (!activeTab) activeTab = MODULES[0].id;
+}
+
+function switchTab(id) {
+  activeTab = id;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.includes(MODULES.find(m=>m.id===id)?.label));
+  });
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + id);
+  });
+}
+
+function renderPanels() {
+  const container = document.getElementById('panelsContainer');
+  if (currentSection === 'today') {
+    container.innerHTML = MODULES.map(m => `
+      <div class="panel ${activeTab === m.id || (!activeTab && m.id === 'habits') ? 'active' : ''}" id="panel-${m.id}">
+        ${m.id === 'habits'  ? renderHabitsPanel()  :
+          m.id === 'tasks'   ? renderTasksPanel()   :
+          m.id === 'sadhana' ? renderSadhanaPanel() :
+          m.id === 'trading' ? renderTradingPanel() :
+          m.id === 'sleep'   ? renderSleepPanel()   : renderNofapPanel()}
+      </div>
+    `).join('');
+    setTimeout(renderPushBanner, 50);
+  } else if (currentSection === 'finance') {
+    container.innerHTML = `<div class="panel active" id="panel-finance">${renderFinancePanel()}</div>`;
+  } else if (currentSection === 'stats') {
+    container.innerHTML = `<div class="panel active" id="panel-stats">${renderStatsPanel()}</div>`;
+  } else if (currentSection === 'ai') {
+    renderAIPanel();
+  } else {
+    container.innerHTML = `<div class="panel active" id="panel-settings">${renderSettingsPanel()}</div>`;
+  }
+}
+
+function renderHabitsPanel() {
+  const today = ensureToday();
+  let html = `<div class="section-header">
+    <div class="section-title">TODAY'S HABITS</div>
+    <div class="section-badge">${state.habits.length} TRACKED</div>
+  </div>`;
+
+  state.habits.forEach(h => {
+    const val = today.habits[h.id];
+    const isDone = val !== undefined && val !== null;
+    const isYes = val === true;
+    const isNo = val === false;
+    const streakVal = computeHabitStreak(h.id);
+    html += `
+    <div class="habit-card ${isDone ? 'done' : ''}" id="hcard-${h.id}">
+      <div class="habit-top">
+        <div class="habit-icon" style="background:${h.color}22;border:1px solid ${h.color}44">${h.icon}</div>
+        <div class="habit-meta">
+          <div class="habit-name">${h.name}</div>
+          <div class="habit-desc">${h.desc}</div>
+        </div>
+        <div class="habit-streak">🔥 ${streakVal}</div>
+      </div>
+      <div class="habit-btns">
+        <button class="btn-yes ${isYes ? 'active' : ''}" onclick="logHabit('${h.id}', true)">✓ YES</button>
+        <button class="btn-no ${isNo ? 'active' : ''}" onclick="logHabit('${h.id}', false)">✗ NO</button>
+      </div>
+    </div>`;
+  });
+
+  html += `
+  <div class="add-module" onclick="openAddModal()">
+    <div class="plus">+</div>
+    <p>ADD CUSTOM HABIT</p>
+  </div>`;
+  return html;
+}
+
+function renderSadhanaPanel() {
+  const today = ensureToday();
+  const s = today.sadhana;
+  const japaPct = Math.min(100, (s.japa.count / s.japa.target) * 100);
+  const dhanPct = Math.min(100, (s.dhyana.mins / s.dhyana.target) * 100);
+  const MANTRAS = ['🔱 Bhairav', '🌸 Kali', '🌟 Tara', '✨ Bagalamukhi', '🌙 Tripura', '☀️ Bhuvaneshvari'];
+
+  return `
+  <div class="section-header">
+    <div class="section-title">SADHANA MODULE</div>
+    <div class="section-badge">${s.japa.done && s.dhyana.done && s.pranayam.done ? '✓ COMPLETE' : 'IN PROGRESS'}</div>
+  </div>
+
+  <div class="sadhana-card">
+    <div class="sadhana-top">
+      <div class="sadhana-icon">📿</div>
+      <div>
+        <div class="sadhana-title">Japa Counter</div>
+        <div class="sadhana-sub">TARGET: ${s.japa.target} REPETITIONS</div>
+      </div>
+    </div>
+    <div class="counter-row">
+      <div class="counter-label">MALAS COMPLETED</div>
+      <div class="counter-ctrl">
+        <button class="c-btn" onclick="adjustJapa(-108)">−</button>
+        <div class="c-val">${s.japa.count}</div>
+        <button class="c-btn" onclick="adjustJapa(108)">+</button>
+      </div>
+    </div>
+    <div class="mini-progress"><div class="mini-bar" style="width:${japaPct}%"></div></div>
+    <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px;text-align:right">${s.japa.count}/${s.japa.target}</div>
+  </div>
+
+  <div class="sadhana-card">
+    <div class="sadhana-top">
+      <div class="sadhana-icon">🧘</div>
+      <div>
+        <div class="sadhana-title">Dhyana / Meditation</div>
+        <div class="sadhana-sub">TARGET: ${s.dhyana.target} MINUTES</div>
+      </div>
+    </div>
+    <div class="counter-row">
+      <div class="counter-label">MINUTES DONE</div>
+      <div class="counter-ctrl">
+        <button class="c-btn" onclick="adjustDhyana(-5)">−</button>
+        <div class="c-val">${s.dhyana.mins}</div>
+        <button class="c-btn" onclick="adjustDhyana(5)">+</button>
+      </div>
+    </div>
+    <div class="mini-progress"><div class="mini-bar" style="width:${dhanPct}%"></div></div>
+  </div>
+
+  <div class="sadhana-card">
+    <div class="sadhana-top">
+      <div class="sadhana-icon">🌬️</div>
+      <div>
+        <div class="sadhana-title">Pranayama</div>
+        <div class="sadhana-sub">BREATHING PRACTICE</div>
+      </div>
+    </div>
+    <div class="habit-btns">
+      <button class="btn-yes ${s.pranayam.done ? 'active' : ''}" onclick="logPranayam(true)">✓ DONE</button>
+      <button class="btn-no ${!s.pranayam.done && s.pranayam.done !== undefined ? '' : ''}" onclick="logPranayam(false)">✗ SKIP</button>
+    </div>
+  </div>
+
+  <div class="sadhana-card">
+    <div class="sadhana-top">
+      <div class="sadhana-icon">🌺</div>
+      <div>
+        <div class="sadhana-title">Upasana / Deity</div>
+        <div class="sadhana-sub">SELECT TODAY'S PRACTICE</div>
+      </div>
+    </div>
+    <div class="mantra-grid">
+      ${MANTRAS.map(m => `
+        <div class="mantra-chip ${s.mantra.selected === m ? 'active' : ''}" onclick="selectMantra('${m}')">
+          <div class="m-name">${m}</div>
+          <div class="m-count">${s.mantra.selected === m ? '✓ ACTIVE' : 'TAP TO SELECT'}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function renderTradingPanel() {
+  const today = ensureToday();
+  const t = today.trading;
+  const verdict = calcTradeVerdict(t);
+
+  return `
+  <div class="section-header">
+    <div class="section-title">TRADING DISCIPLINE</div>
+    <div class="section-badge">CHECKLIST</div>
+  </div>
+
+  <div class="trade-metric">
+    <div class="trade-top">
+      <div style="font-size:22px">📉</div>
+      <div>
+        <div style="font-size:15px;font-weight:700">Pre-Trade Check</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">VERIFY BEFORE ENTERING</div>
+      </div>
+      <div class="trade-verdict ${verdict === 'GO' ? 'go' : verdict === 'NO' ? 'no' : ''}">${verdict || 'PENDING'}</div>
+    </div>
+
+    <div class="trade-row">
+      <label>SL SET?</label>
+      <div class="toggle-wrap">
+        <button class="tgl ${t.sl === true ? 'on' : ''}" onclick="setTrade('sl', true)">YES</button>
+        <button class="tgl ${t.sl === false ? 'off' : ''}" onclick="setTrade('sl', false)">NO</button>
+      </div>
+    </div>
+
+    <div class="trade-row">
+      <label>EMOTION NEUTRAL?</label>
+      <div class="toggle-wrap">
+        <button class="tgl ${t.emotion === true ? 'on' : ''}" onclick="setTrade('emotion', true)">YES</button>
+        <button class="tgl ${t.emotion === false ? 'off' : ''}" onclick="setTrade('emotion', false)">NO</button>
+      </div>
+    </div>
+
+    <div class="trade-row">
+      <label>RISK:REWARD RATIO</label>
+      <input class="rr-input" type="number" step="0.1" min="0" placeholder="2.0"
+        value="${t.rr || ''}" oninput="setTradeRR(this.value)">
+    </div>
+  </div>
+
+  <div class="trade-metric">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:2px">TRADE RULES</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${['Never trade without SL', 'Min R:R must be 2:1', 'No revenge trading', 'Review chart in D1 + H4', 'Check news calendar before entry'].map((r,i) => `
+        <div style="display:flex;align-items:center;gap:10px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">
+          <span style="color:var(--accent)">${i+1}.</span> ${r}
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function calcTradeVerdict(t) {
+  if (t.sl === null || t.emotion === null || !t.rr) return null;
+  if (t.sl === true && t.emotion === true && parseFloat(t.rr) >= 2) return 'GO';
+  return 'NO';
+}
+
+function renderStatsPanel() {
+  const days = ['S','M','T','W','T','F','S'];
+  const today = new Date();
+  let weekHtml = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const k = d.toISOString().split('T')[0];
+    const log = state.log[k];
+    const {score, total} = log ? calcScore(log) : {score:0, total:0};
+    const pct = total > 0 ? score/total : 0;
+    const cls = i === 0 ? 'today' : pct >= 0.8 ? 'full' : pct > 0 ? 'partial' : 'zero';
+    weekHtml += `
+      <div class="day-cell ${cls}">
+        <div class="d-label">${days[d.getDay()]}</div>
+        <div class="d-score" style="color:${pct>=0.8?'var(--accent)':pct>0?'var(--warn)':'var(--muted)'}">${score}</div>
+      </div>`;
+  }
+
+  // Calculate averages
+  const logs = Object.values(state.log);
+  const total7 = logs.slice(-7).reduce((a,l) => a + calcScore(l).score, 0);
+  const avg7 = logs.length > 0 ? (total7 / Math.min(7, logs.length)).toFixed(1) : 0;
+  const totalDays = logs.filter(l => calcScore(l).score > 0).length;
+
+  return `
+  <div style="padding:20px 24px 0">
+    <div class="section-header">
+      <div class="section-title">WEEKLY VIEW</div>
+    </div>
+    <div class="week-grid">${weekHtml}</div>
+
+    <div class="section-header">
+      <div class="section-title">STATISTICS</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--accent)">${avg7}</div>
+        <div class="stat-name">7-DAY AVG</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--accent3)">${totalDays}</div>
+        <div class="stat-name">ACTIVE DAYS</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--accent4)">${state.habits.length}</div>
+        <div class="stat-name">HABITS</div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-top:8px">
+      <div class="section-title">HABIT BREAKDOWN</div>
+    </div>
+    ${state.habits.map(h => {
+      const streak = computeHabitStreak(h.id);
+      const last30 = computeHabitLast30(h.id);
+      return `
+      <div class="habit-card" style="margin-bottom:8px">
+        <div class="habit-top">
+          <div class="habit-icon" style="background:${h.color}22;border:1px solid ${h.color}44">${h.icon}</div>
+          <div class="habit-meta">
+            <div class="habit-name">${h.name}</div>
+            <div class="habit-desc">Streak: ${streak} days · Last 30: ${last30}%</div>
+          </div>
+        </div>
+        <div class="mini-progress"><div class="mini-bar" style="width:${last30}%;background:${h.color}"></div></div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderSettingsPanel() {
+  return `
+  <div style="padding:20px 24px 0">
+    <div class="section-header">
+      <div class="section-title">YOUR HABITS</div>
+      <div class="section-badge">${state.habits.length} TOTAL</div>
+    </div>
+    ${state.habits.map(h => `
+      <div class="habit-card" style="margin-bottom:8px">
+        <div class="habit-top">
+          <div class="habit-icon" style="background:${h.color}22;border:1px solid ${h.color}44">${h.icon}</div>
+          <div class="habit-meta">
+            <div class="habit-name">${h.name}</div>
+            <div class="habit-desc">${h.inverted ? '⚠️ Inverted scoring' : '✓ Normal scoring'}</div>
+          </div>
+          <button onclick="deleteHabit('${h.id}')" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px">✕</button>
+        </div>
+      </div>
+    `).join('')}
+    <div class="add-module" onclick="openAddModal()">
+      <div class="plus">+</div>
+      <p>ADD NEW HABIT MODULE</p>
+    </div>
+
+    <div class="section-header" style="margin-top:24px">
+      <div class="section-title">DATA</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="exportData()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">📤 EXPORT</button>
+      <button onclick="if(confirm('Reset all data?')){localStorage.clear();location.reload()}" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">🗑️ RESET</button>
+    </div>
+  </div>`;
+}
+
+// Migrate old state without sleepConfig
+if (!state.sleepConfig) {
+  state.sleepConfig = DEFAULT_STATE().sleepConfig;
+  saveState();
+}
+// Migrate nofap state
+if (!state.nofap) {
+  state.nofap = { startDate: null, relapses: [], urgeLog: [] };
+  saveState();
+}
+// Migrate finance state
+if (!state.finance) {
+  state.finance = {
+    incomes: [],        // { id, label, amount, freq: 'monthly'|'once', date }
+    fixed: [],          // { id, label, amount, cat, active }
+    daily: [],          // { id, label, amount, cat, date }
+    budget: 0           // monthly budget cap
+  };
+  saveState();
+}
+
+// ===== SLEEP HELPERS =====
+function calcBedtime(cfg) {
+  // Convert wake time to total minutes (24h)
+  let wakeH = cfg.wakeHour;
+  if (cfg.wakeAmpm === 'PM' && wakeH !== 12) wakeH += 12;
+  if (cfg.wakeAmpm === 'AM' && wakeH === 12) wakeH = 0;
+  const wakeMins = wakeH * 60 + cfg.wakeMin;
+  let bedMins = wakeMins - cfg.sleepHours * 60;
+  if (bedMins < 0) bedMins += 1440;
+  const bh = Math.floor(bedMins / 60) % 24;
+  const bm = bedMins % 60;
+  const ampm = bh >= 12 ? 'PM' : 'AM';
+  const h12 = bh % 12 === 0 ? 12 : bh % 12;
+  return { h24: bh, m: bm, ampm, display: `${h12}:${String(bm).padStart(2,'0')} ${ampm}` };
+}
+
+function calcWakeDisplay(cfg) {
+  const h = cfg.wakeHour;
+  return `${h}:${String(cfg.wakeMin).padStart(2,'0')} ${cfg.wakeAmpm}`;
+}
+
+function calcCountdown() {
+  const cfg = state.sleepConfig;
+  const bed = calcBedtime(cfg);
+  const now = new Date();
+  let bedTotalMins = bed.h24 * 60 + bed.m;
+  let nowMins = now.getHours() * 60 + now.getMinutes();
+  let diff = bedTotalMins - nowMins;
+  if (diff < 0) diff += 1440;
+  if (diff > 720) return { label: 'WAKE UP IN', mins: 0, isBed: false, passed: true };
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  return { label: 'BEDTIME IN', mins: diff, h, m, isBed: true, passed: diff === 0 };
+}
+
+function renderSleepPanel() {
+  const cfg = state.sleepConfig;
+  const bed = calcBedtime(cfg);
+  const cd = calcCountdown();
+  const wakeDisp = calcWakeDisplay(cfg);
+
+  const tips = [
+    'Avoid screens <b>30 min</b> before bed',
+    'Keep room temp between <b>18–20°C</b>',
+    'No caffeine after <b>2 PM</b>',
+    'Dark room = deeper sleep cycles',
+    'Same wake time daily resets circadian rhythm',
+  ];
+  const tip = tips[new Date().getDay() % tips.length];
+
+  return `
+  <div class="section-header">
+    <div class="section-title">SLEEP & ALARM</div>
+    <div class="section-badge">${cfg.sleepHours}H TARGET</div>
+  </div>
+
+  <!-- Hero countdown -->
+  <div class="sleep-hero">
+    <div class="moon-icon">🌙</div>
+    <div class="sleep-status">${cd.label}</div>
+    <div class="sleep-countdown" id="sleepCountdown">${cd.passed ? '—' : `${cd.h}h ${cd.m}m`}</div>
+    <div class="sleep-sub">BED ${bed.display} → WAKE ${wakeDisp}</div>
+  </div>
+
+  <!-- Wake time setter -->
+  <div class="time-setter">
+    <div class="time-setter-top">
+      <div class="time-setter-icon">⏰</div>
+      <div>
+        <div class="time-setter-title">Wake Up Time</div>
+        <div class="time-setter-sub">SET YOUR TARGET WAKE TIME</div>
+      </div>
+    </div>
+    <div class="time-display">
+      <div class="time-col">
+        <button class="time-arrow" onclick="adjustWake('hour', 1)">▲</button>
+        <div class="time-val" id="wakeHourDisp">${cfg.wakeHour}</div>
+        <button class="time-arrow" onclick="adjustWake('hour', -1)">▼</button>
+      </div>
+      <div class="time-sep">:</div>
+      <div class="time-col">
+        <button class="time-arrow" onclick="adjustWake('min', 5)">▲</button>
+        <div class="time-val" id="wakeMinDisp">${String(cfg.wakeMin).padStart(2,'0')}</div>
+        <button class="time-arrow" onclick="adjustWake('min', -5)">▼</button>
+      </div>
+      <div class="ampm-col">
+        <button class="ampm-btn ${cfg.wakeAmpm === 'AM' ? 'active' : ''}" onclick="setAmpm('AM')">AM</button>
+        <button class="ampm-btn ${cfg.wakeAmpm === 'PM' ? 'active' : ''}" onclick="setAmpm('PM')">PM</button>
+      </div>
+    </div>
+
+    <!-- Sleep hours -->
+    <div class="sleep-hours-row">
+      <div class="sleep-hours-label">SLEEP DURATION</div>
+      <div class="sleep-hours-btns">
+        ${[6, 7, 8, 9].map(h => `
+          <button class="sh-btn ${cfg.sleepHours === h ? 'active' : ''}" onclick="setSleepHours(${h})">${h}H</button>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Calculated bedtime -->
+    <div class="bedtime-result">
+      <div>
+        <div class="bedtime-label">CALCULATED BEDTIME</div>
+        <div class="bedtime-time" id="bedtimeDisp">${bed.display}</div>
+      </div>
+      <div style="font-size:28px">🛌</div>
+    </div>
+  </div>
+
+  <!-- Alarm list -->
+  <div class="time-setter">
+    <div class="time-setter-top">
+      <div class="time-setter-icon">🔔</div>
+      <div>
+        <div class="time-setter-title">Reminders</div>
+        <div class="time-setter-sub">TOGGLE EACH ALARM ON/OFF</div>
+      </div>
+    </div>
+    <div class="alarm-list">
+      ${cfg.alarms.map((a, i) => {
+        let timeDisp = '';
+        if (a.id === 'wake') timeDisp = wakeDisp;
+        else if (a.id === 'bed') timeDisp = bed.display;
+        else if (a.id === 'warn') {
+          // 30 min before bed
+          let warnMins = bed.h24 * 60 + bed.m - 30;
+          if (warnMins < 0) warnMins += 1440;
+          const wh = Math.floor(warnMins/60)%24;
+          const wm = warnMins%60;
+          const wa = wh >= 12 ? 'PM' : 'AM';
+          const wh12 = wh%12===0?12:wh%12;
+          timeDisp = `${wh12}:${String(wm).padStart(2,'0')} ${wa}`;
+        }
+        return `
+        <div class="alarm-item ${a.enabled ? 'armed' : ''}">
+          <div class="alarm-dot ${a.enabled ? 'on' : ''}"></div>
+          <div class="alarm-info">
+            <div class="alarm-time">${timeDisp}</div>
+            <div class="alarm-label">${a.label}</div>
+          </div>
+          <div class="alarm-toggle ${a.enabled ? 'on' : ''}" onclick="toggleAlarm(${i})"></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- Sleep tip -->
+  <div class="sleep-tip">💡 <b>TIP:</b> ${tip}</div>
+  `;
+}
+
+// ===== NOFAP MODULE =====
+function getNofapDays() {
+  if (!state.nofap.startDate) return 0;
+  const start = new Date(state.nofap.startDate);
+  const now = new Date();
+  return Math.floor((now - start) / (1000 * 60 * 60 * 24));
+}
+
+function getNofapMilestone(days) {
+  if (days >= 365) return { label: '👑 ONE YEAR WARRIOR', color: '#e8ff47' };
+  if (days >= 90)  return { label: '🔥 90 DAY LEGEND', color: '#ffb347' };
+  if (days >= 30)  return { label: '⚡ 30 DAY WARRIOR', color: '#47c8ff' };
+  if (days >= 21)  return { label: '🧠 REWIRING ACTIVE', color: '#c47bff' };
+  if (days >= 14)  return { label: '💪 2 WEEK STRONG', color: '#47ffb2' };
+  if (days >= 7)   return { label: '🛡️ 1 WEEK DONE', color: '#47ffb2' };
+  if (days >= 3)   return { label: '✊ HOLDING STRONG', color: '#47ffb2' };
+  return { label: '🌱 JUST STARTED', color: '#6b6b80' };
+}
+
+function getNofapNextMilestone(days) {
+  const milestones = [3, 7, 14, 21, 30, 90, 180, 365];
+  for (const m of milestones) { if (days < m) return m; }
+  return 365;
+}
+
+function renderNofapPanel() {
+  const days = getNofapDays();
+  const ms = getNofapMilestone(days);
+  const next = getNofapNextMilestone(days);
+  const pct = Math.min(100, (days / next) * 100);
+  const relapses = state.nofap.relapses || [];
+  const urges = state.nofap.urgeLog || [];
+  const todayUrges = urges.filter(u => u.date === getTodayKey()).length;
+
+  const benefits = [
+    { day: 3,  icon: '⚡', label: 'Energy surge begins' },
+    { day: 7,  icon: '😴', label: 'Deeper sleep quality' },
+    { day: 14, icon: '🧠', label: 'Brain fog lifts' },
+    { day: 21, icon: '💬', label: 'Social confidence up' },
+    { day: 30, icon: '🔥', label: 'Testosterone peak' },
+    { day: 90, icon: '👑', label: 'Full rewire complete' },
+  ];
+
+  return `
+  <div class="section-header">
+    <div class="section-title">BRAHMACHARYA</div>
+    <div class="section-badge" style="color:${ms.color};border-color:${ms.color}44">${ms.label}</div>
+  </div>
+
+  <!-- Main counter -->
+  <div style="background:linear-gradient(135deg,#0a0f0a,#0f1a0a);border:1px solid #1a2a1a;border-radius:20px;padding:28px 20px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:120px;height:120px;background:radial-gradient(circle,${ms.color}11,transparent 70%);border-radius:50%"></div>
+    <div style="font-size:56px;font-weight:800;color:${ms.color};line-height:1;filter:drop-shadow(0 0 20px ${ms.color}44)">${days}</div>
+    <div style="font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);letter-spacing:3px;margin-top:4px">DAYS CLEAN</div>
+    <div style="margin:16px 0 8px;background:var(--border);border-radius:99px;height:6px;overflow:hidden">
+      <div style="height:100%;background:${ms.color};border-radius:99px;width:${pct}%;transition:width 0.8s ease"></div>
+    </div>
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">${days} / ${next} DAYS → NEXT MILESTONE</div>
+  </div>
+
+  <!-- Start / Relapse buttons -->
+  ${!state.nofap.startDate ? `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:12px;text-align:center">
+    <div style="font-size:13px;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:14px">START YOUR STREAK TODAY</div>
+    <button onclick="nofapStart()" style="width:100%;padding:16px;border-radius:12px;border:none;background:var(--success);color:#000;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;cursor:pointer">🛡️ BEGIN BRAHMACHARYA</button>
+  </div>
+  ` : `
+  <div style="display:flex;gap:10px;margin-bottom:12px">
+    <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center">
+      <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--warn)">${relapses.length}</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px">TOTAL RELAPSES</div>
+    </div>
+    <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center">
+      <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--accent3)">${todayUrges}</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px">URGES TODAY</div>
+    </div>
+    <div style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center">
+      <div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--accent4)">${relapses.length > 0 ? Math.round(days / relapses.length) : days}</div>
+      <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-top:4px">AVG STREAK</div>
+    </div>
+  </div>
+  `}
+
+  <!-- Urge button -->
+  ${state.nofap.startDate ? `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:12px">URGE MANAGEMENT</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">Feeling an urge? Log it — awareness is the first weapon. Then use a redirect:</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      ${['🏃 Go for a run','🧘 Do pranayama','💧 Cold shower','📖 Read something','💪 Do pushups','🔱 Chant mantra'].map(r => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-align:center;cursor:pointer" onclick="showToast('${r} — channel that energy!')">${r}</div>
+      `).join('')}
+    </div>
+    <button onclick="nofapLogUrge()" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--accent3);background:transparent;color:var(--accent3);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">⚡ LOG URGE — STAY STRONG</button>
+  </div>
+
+  <!-- Relapse -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:10px">HONEST LOGGING</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">Fell? Log it honestly. Every reset is data — not defeat. Rise again.</div>
+    <button onclick="nofapRelapse()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #3a1a1a;background:transparent;color:var(--accent2);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px">⚠️ LOG RELAPSE & RESTART</button>
+  </div>
+  ` : ''}
+
+  <!-- Milestone roadmap -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:14px">BENEFITS TIMELINE</div>
+    ${benefits.map(b => `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;opacity:${days >= b.day ? '1' : '0.35'}">
+        <div style="width:32px;height:32px;border-radius:8px;background:${days >= b.day ? '#1a2a1a' : 'var(--surface)'};border:1px solid ${days >= b.day ? 'var(--success)' : 'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${b.icon}</div>
+        <div style="flex:1">
+          <div style="font-family:'Space Mono',monospace;font-size:11px;color:${days >= b.day ? 'var(--text)' : 'var(--muted)'}">Day ${b.day} — ${b.label}</div>
+        </div>
+        ${days >= b.day ? '<div style="color:var(--success);font-size:12px">✓</div>' : ''}
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- Urge history -->
+  ${urges.length > 0 ? `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px">
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:10px">RECENT URGE LOG</div>
+    ${urges.slice(-5).reverse().map(u => `
+      <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)">⚡ ${u.date} ${u.time} — Urge resisted</div>
+    `).join('')}
+  </div>
+  ` : ''}
+  `;
+}
+
+function nofapStart() {
+  if (state.nofap.startDate && !confirm('Reset and start a new streak?')) return;
+  state.nofap.startDate = new Date().toISOString().split('T')[0];
+  state.nofap.relapses = state.nofap.relapses || [];
+  saveState();
+  showToast('🛡️ Streak started. Stay strong!');
+  renderPanels(); switchTab('nofap');
+}
+
+function nofapLogUrge() {
+  const now = new Date();
+  if (!state.nofap.urgeLog) state.nofap.urgeLog = [];
+  state.nofap.urgeLog.push({ date: getTodayKey(), time: now.toTimeString().slice(0,5) });
+  saveState();
+  showToast('⚡ Urge logged. You resisted — that\'s strength!');
+  renderPanels(); switchTab('nofap');
+}
+
+function nofapRelapse() {
+  if (!confirm('Log a relapse? Your streak will reset but your history is saved.')) return;
+  const days = getNofapDays();
+  if (!state.nofap.relapses) state.nofap.relapses = [];
+  state.nofap.relapses.push({ date: getTodayKey(), streakDays: days });
+  state.nofap.startDate = new Date().toISOString().split('T')[0];
+  saveState();
+  showToast('↩️ Reset. Every master fell first. Rise again.');
+  renderPanels(); switchTab('nofap');
+}
+
+// Sleep actions
+function adjustWake(part, delta) {
+  const cfg = state.sleepConfig;
+  if (part === 'hour') {
+    cfg.wakeHour = ((cfg.wakeHour - 1 + delta + 12) % 12) + 1;
+  } else {
+    cfg.wakeMin = (cfg.wakeMin + delta + 60) % 60;
+  }
+  saveState();
+  renderPanels(); switchTab('sleep');
+}
+function setAmpm(v) {
+  state.sleepConfig.wakeAmpm = v;
+  saveState();
+  renderPanels(); switchTab('sleep');
+}
+function setSleepHours(h) {
+  state.sleepConfig.sleepHours = h;
+  saveState();
+  renderPanels(); switchTab('sleep');
+}
+function toggleAlarm(i) {
+  state.sleepConfig.alarms[i].enabled = !state.sleepConfig.alarms[i].enabled;
+  const a = state.sleepConfig.alarms[i];
+  showToast(a.enabled ? `🔔 ${a.label} armed` : `🔕 Alarm off`);
+  saveState();
+  renderPanels(); switchTab('sleep');
+}
+
+// Live countdown tick
+setInterval(() => {
+  if (activeTab !== 'sleep') return;
+  const el = document.getElementById('sleepCountdown');
+  if (!el) return;
+  const cd = calcCountdown();
+  el.textContent = cd.passed ? '—' : `${cd.h}h ${cd.m}m`;
+}, 30000);
+
+// ===== ACTIONS =====
+function logHabit(id, val) {
+  const today = ensureToday();
+  today.habits[id] = val;
+  saveState();
+  updateScoreUI();
+  const h = state.habits.find(h => h.id === id);
+  const msgs = val === true
+    ? ['✅ Locked in!', '🔥 Keep going!', '💪 That\'s discipline!']
+    : ['❌ Log it, fix it.', '⚠️ Missed. Tomorrow better.'];
+  showToast(msgs[Math.floor(Math.random() * msgs.length)]);
+  // Re-render just this panel to update button states
+  renderPanels();
+  switchTab(activeTab);
+}
+
+function adjustJapa(delta) {
+  const today = ensureToday();
+  today.sadhana.japa.count = Math.max(0, today.sadhana.japa.count + delta);
+  today.sadhana.japa.done = today.sadhana.japa.count >= today.sadhana.japa.target;
+  saveState();
+  updateScoreUI();
+  renderPanels(); switchTab('sadhana');
+}
+
+function adjustDhyana(delta) {
+  const today = ensureToday();
+  today.sadhana.dhyana.mins = Math.max(0, today.sadhana.dhyana.mins + delta);
+  today.sadhana.dhyana.done = today.sadhana.dhyana.mins >= today.sadhana.dhyana.target;
+  saveState();
+  updateScoreUI();
+  renderPanels(); switchTab('sadhana');
+}
+
+function logPranayam(v) {
+  const today = ensureToday();
+  today.sadhana.pranayam.done = v;
+  saveState();
+  updateScoreUI();
+  showToast(v ? '🌬️ Pranayama logged' : '⚠️ Pranayama skipped');
+  renderPanels(); switchTab('sadhana');
+}
+
+function selectMantra(m) {
+  const today = ensureToday();
+  today.sadhana.mantra.selected = today.sadhana.mantra.selected === m ? null : m;
+  saveState();
+  renderPanels(); switchTab('sadhana');
+}
+
+function setTrade(key, val) {
+  const today = ensureToday();
+  today.trading[key] = val;
+  const v = calcTradeVerdict(today.trading);
+  today.trading.verdict = v;
+  saveState();
+  updateScoreUI();
+  renderPanels(); switchTab('trading');
+}
+
+function setTradeRR(val) {
+  const today = ensureToday();
+  today.trading.rr = val;
+  const v = calcTradeVerdict(today.trading);
+  today.trading.verdict = v;
+  saveState();
+  updateScoreUI();
+}
+
+function computeHabitStreak(id) {
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 60; i++) {
+    const k = d.toISOString().split('T')[0];
+    const log = state.log[k];
+    if (log && log.habits[id] === true) streak++;
+    else if (i > 0) break;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function computeHabitLast30(id) {
+  let done = 0, total = 0;
+  const d = new Date();
+  for (let i = 0; i < 30; i++) {
+    const k = d.toISOString().split('T')[0];
+    const log = state.log[k];
+    if (log && log.habits[id] !== undefined) { total++; if (log.habits[id] === true) done++; }
+    d.setDate(d.getDate() - 1);
+  }
+  return total > 0 ? Math.round(done/total*100) : 0;
+}
+
+function deleteHabit(id) {
+  if (!confirm('Delete this habit?')) return;
+  state.habits = state.habits.filter(h => h.id !== id);
+  saveState();
+  renderAll();
+  showToast('Habit removed');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'discipline_os_backup.json';
+  a.click();
+}
+
+// ===== MODAL =====
+function openAddModal() {
+  document.getElementById('addModal').classList.add('open');
+  const grid = document.getElementById('emojiGrid');
+  grid.innerHTML = EMOJIS.map(e => `
+    <div class="emoji-opt ${e === selectedEmoji ? 'sel' : ''}" onclick="selectEmoji('${e}', this)">${e}</div>
+  `).join('');
+}
+function closeModal() { document.getElementById('addModal').classList.remove('open'); }
+function selectEmoji(e, el) {
+  selectedEmoji = e;
+  document.querySelectorAll('.emoji-opt').forEach(x => x.classList.remove('sel'));
+  el.classList.add('sel');
+}
+function confirmAddHabit() {
+  const name = document.getElementById('newHabitName').value.trim();
+  if (!name) { showToast('⚠️ Enter a name'); return; }
+  const desc = document.getElementById('newHabitDesc').value.trim() || 'Daily habit';
+  const COLORS = ['#47ffb2','#ffb347','#ff4f7b','#47c8ff','#c47bff','#e8ff47'];
+  const color = COLORS[state.habits.length % COLORS.length];
+  state.habits.push({
+    id: 'h_' + Date.now(),
+    name, desc,
+    icon: selectedEmoji,
+    color,
+    inverted: false,
+    val: null,
+    note: '',
+    streak: 0
+  });
+  saveState();
+  closeModal();
+  renderAll();
+  showToast(`✅ "${name}" added!`);
+}
+
+// ═══════════════════════════════════════════════════════
+// FINANCE MODULE
+// ═══════════════════════════════════════════════════════
+const CAT_META = {
+  subscription: { icon: '📺', color: '#c47bff', label: 'Subscription' },
+  family:        { icon: '👨‍👩‍👧', color: '#ffb347', label: 'Family' },
+  server:        { icon: '🖥️',  color: '#47c8ff', label: 'Server/Tech' },
+  emi:           { icon: '🏦',  color: '#ff4f7b', label: 'EMI/Loan' },
+  rent:          { icon: '🏠',  color: '#47ffb2', label: 'Rent/Utils' },
+  other:         { icon: '📦',  color: '#6b6b80', label: 'Other' },
+  food:          { icon: '🍱',  color: '#ffb347', label: 'Food' },
+  transport:     { icon: '🚗',  color: '#47c8ff', label: 'Transport' },
+  shopping:      { icon: '🛍️', color: '#c47bff', label: 'Shopping' },
+  health:        { icon: '💊',  color: '#47ffb2', label: 'Health' },
+  entertainment: { icon: '🎬',  color: '#ff4f7b', label: 'Entertain' },
+  misc:          { icon: '📦',  color: '#6b6b80', label: 'Misc' },
+};
+
+function fmtINR(n) {
+  if (n >= 100000) return '₹' + (n/100000).toFixed(1) + 'L';
+  if (n >= 1000)   return '₹' + (n/1000).toFixed(1) + 'K';
+  return '₹' + Math.round(n);
+}
+
+function getThisMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function calcFinanceSummary() {
+  const fin = state.finance;
+  const mKey = getThisMonthKey();
+
+  // Total monthly income
+  const monthlyIncome = fin.incomes
+    .filter(i => i.freq === 'monthly')
+    .reduce((s, i) => s + i.amount, 0);
+  const onceIncome = fin.incomes
+    .filter(i => i.freq === 'once' && i.date && i.date.startsWith(mKey))
+    .reduce((s, i) => s + i.amount, 0);
+  const totalIncome = monthlyIncome + onceIncome;
+
+  // Fixed expenses
+  const fixedTotal = fin.fixed
+    .filter(f => f.active !== false)
+    .reduce((s, f) => s + f.amount, 0);
+
+  // Daily expenses this month
+  const dailyTotal = fin.daily
+    .filter(d => d.date && d.date.startsWith(mKey))
+    .reduce((s, d) => s + d.amount, 0);
+
+  const totalExpense = fixedTotal + dailyTotal;
+  const balance = totalIncome - totalExpense;
+  const savings = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
+
+  return { totalIncome, fixedTotal, dailyTotal, totalExpense, balance, savings, monthlyIncome, onceIncome };
+}
+
+function renderFinancePanel() {
+  const fin = state.finance;
+  const s = calcFinanceSummary();
+  const mKey = getThisMonthKey();
+  const spendPct = s.totalIncome > 0 ? Math.min(100, (s.totalExpense / s.totalIncome) * 100) : 0;
+  const barColor = spendPct > 90 ? 'var(--accent2)' : spendPct > 70 ? 'var(--warn)' : 'var(--success)';
+
+  // Daily expenses this month sorted newest first
+  const thisMonthDaily = [...fin.daily]
+    .filter(d => d.date && d.date.startsWith(mKey))
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  // Group daily by category for breakdown
+  const catTotals = {};
+  thisMonthDaily.forEach(d => {
+    catTotals[d.cat] = (catTotals[d.cat] || 0) + d.amount;
+  });
+
+  return `
+  <div style="padding:20px 24px 0">
+
+  <!-- ── HERO BALANCE ── -->
+  <div class="fin-hero">
+    <div class="fin-month">📅 ${new Date().toLocaleString('en-IN',{month:'long',year:'numeric'}).toUpperCase()}</div>
+    <div class="fin-balance ${s.balance < 0 ? 'negative' : ''}">${fmtINR(Math.abs(s.balance))}</div>
+    <div class="fin-sublabel">${s.balance >= 0 ? '✅ NET SAVINGS THIS MONTH' : '⚠️ OVERSPENDING THIS MONTH'}</div>
+    <div class="fin-row">
+      <div class="fin-pill">
+        <div class="fin-pill-label">INCOME</div>
+        <div class="fin-pill-val" style="color:var(--success)">${fmtINR(s.totalIncome)}</div>
+      </div>
+      <div class="fin-pill">
+        <div class="fin-pill-label">SPENT</div>
+        <div class="fin-pill-val" style="color:var(--accent2)">${fmtINR(s.totalExpense)}</div>
+      </div>
+      <div class="fin-pill">
+        <div class="fin-pill-label">SAVED</div>
+        <div class="fin-pill-val" style="color:${s.savings >= 0 ? 'var(--warn)' : 'var(--accent2)'}">${s.savings}%</div>
+      </div>
+    </div>
+    <div class="fin-bar-wrap">
+      <div class="fin-bar-label">
+        <span>SPENT ${fmtINR(s.totalExpense)}</span>
+        <span>${Math.round(spendPct)}% of income</span>
+      </div>
+      <div class="fin-bar-bg">
+        <div class="fin-bar-fill" style="width:${spendPct}%;background:${barColor}"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUMMARY GRID ── -->
+  <div class="fin-summary-grid">
+    <div class="fin-summary-box">
+      <div class="fin-summary-val" style="color:var(--success)">${fmtINR(s.monthlyIncome)}</div>
+      <div class="fin-summary-name">Monthly</div>
+    </div>
+    <div class="fin-summary-box">
+      <div class="fin-summary-val" style="color:var(--accent2)">${fmtINR(s.fixedTotal)}</div>
+      <div class="fin-summary-name">Fixed</div>
+    </div>
+    <div class="fin-summary-box">
+      <div class="fin-summary-val" style="color:var(--warn)">${fmtINR(s.dailyTotal)}</div>
+      <div class="fin-summary-name">Daily</div>
+    </div>
+  </div>
+
+  <!-- ── INCOME ── -->
+  <div class="fin-card" style="margin-bottom:10px">
+    <div class="fin-card-header">
+      <div>
+        <div class="fin-card-title">💵 Income Sources</div>
+        <div class="fin-card-sub">${fin.incomes.length} sources · ${fmtINR(s.totalIncome)}/mo</div>
+      </div>
+      <button class="fin-add-btn" onclick="openFinanceModal('incomeModal')">+</button>
+    </div>
+    ${fin.incomes.length === 0 ? `<div class="fin-empty">No income added yet</div>` :
+      fin.incomes.map(i => `
+      <div class="fin-item">
+        <div class="fin-item-icon" style="background:#0a1f0a;border:1px solid #1a3a1a">💵</div>
+        <div class="fin-item-info">
+          <div class="fin-item-name">${i.label}</div>
+          <div class="fin-item-meta">${i.freq === 'monthly' ? '🔄 Monthly' : '1️⃣ One-time · ' + (i.date||'')}</div>
+        </div>
+        <div class="fin-item-amt" style="color:var(--success)">${fmtINR(i.amount)}</div>
+        <button class="fin-item-del" onclick="deleteFinanceItem('income','${i.id}')">✕</button>
+      </div>`).join('')
+    }
+  </div>
+
+  <!-- ── FIXED EXPENSES ── -->
+  <div class="fin-card" style="margin-bottom:10px">
+    <div class="fin-card-header">
+      <div>
+        <div class="fin-card-title">📌 Fixed Expenses</div>
+        <div class="fin-card-sub">${fin.fixed.filter(f=>f.active!==false).length} active · ${fmtINR(s.fixedTotal)}/mo</div>
+      </div>
+      <button class="fin-add-btn" onclick="openFinanceModal('fixedModal')">+</button>
+    </div>
+    ${fin.fixed.length === 0 ? `<div class="fin-empty">No fixed expenses yet<br><span style="font-size:9px">Add server costs, Netflix, family expenses...</span></div>` :
+      fin.fixed.map(f => {
+        const cm = CAT_META[f.cat] || CAT_META.other;
+        return `
+        <div class="fin-item" style="${f.active===false?'opacity:0.4':''}">
+          <div class="fin-item-icon" style="background:${cm.color}18;border:1px solid ${cm.color}33">${cm.icon}</div>
+          <div class="fin-item-info">
+            <div class="fin-item-name">${f.label}</div>
+            <div class="fin-item-meta"><span class="fin-cat-badge">${cm.label}</span> · 🔄 Monthly</div>
+          </div>
+          <div class="fin-item-amt" style="color:var(--accent2)">${fmtINR(f.amount)}</div>
+          <button class="fin-item-del" onclick="deleteFinanceItem('fixed','${f.id}')">✕</button>
+        </div>`;
+      }).join('')
+    }
+  </div>
+
+  <!-- ── DAILY LOG ── -->
+  <div class="fin-card" style="margin-bottom:10px">
+    <div class="fin-card-header">
+      <div>
+        <div class="fin-card-title">🧾 Daily Expenses</div>
+        <div class="fin-card-sub">This month · ${fmtINR(s.dailyTotal)} total</div>
+      </div>
+      <button class="fin-add-btn" onclick="openFinanceModal('dailyModal')">+</button>
+    </div>
+
+    <!-- Category breakdown -->
+    ${Object.keys(catTotals).length > 0 ? `
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px">
+      ${Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,amt]) => {
+        const cm = CAT_META[cat] || CAT_META.misc;
+        return `<div style="background:${cm.color}18;border:1px solid ${cm.color}33;border-radius:8px;padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;color:${cm.color}">${cm.icon} ${fmtINR(amt)}</div>`;
+      }).join('')}
+    </div>` : ''}
+
+    ${thisMonthDaily.length === 0 ? `<div class="fin-empty">No expenses logged this month</div>` :
+      thisMonthDaily.slice(0, 20).map(d => {
+        const cm = CAT_META[d.cat] || CAT_META.misc;
+        return `
+        <div class="fin-item">
+          <div class="fin-item-icon" style="background:${cm.color}18;border:1px solid ${cm.color}33">${cm.icon}</div>
+          <div class="fin-item-info">
+            <div class="fin-item-name">${d.label}</div>
+            <div class="fin-item-meta">${d.date} · <span class="fin-cat-badge">${cm.label}</span></div>
+          </div>
+          <div class="fin-item-amt" style="color:var(--warn)">${fmtINR(d.amount)}</div>
+          <button class="fin-item-del" onclick="deleteFinanceItem('daily','${d.id}')">✕</button>
+        </div>`;
+      }).join('')
+    }
+    ${thisMonthDaily.length > 20 ? `<div class="fin-empty" style="padding:10px">+${thisMonthDaily.length-20} more this month</div>` : ''}
+  </div>
+
+  </div>`;
+}
+
+// Finance modal actions
+function openFinanceModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeFinanceModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function confirmAddIncome() {
+  const label = document.getElementById('incomeLabel').value.trim();
+  const amount = parseFloat(document.getElementById('incomeAmt').value);
+  const freq = document.getElementById('incomeFreq').value;
+  if (!label || !amount || amount <= 0) { showToast('⚠️ Fill in label and amount'); return; }
+  state.finance.incomes.push({ id: 'i_' + Date.now(), label, amount, freq, date: getTodayKey() });
+  saveState();
+  closeFinanceModal('incomeModal');
+  document.getElementById('incomeLabel').value = '';
+  document.getElementById('incomeAmt').value = '';
+  showToast(`💵 Income "${label}" added`);
+  renderPanels();
+}
+
+function confirmAddFixed() {
+  const label = document.getElementById('fixedLabel').value.trim();
+  const amount = parseFloat(document.getElementById('fixedAmt').value);
+  const cat = document.getElementById('fixedCat').value;
+  if (!label || !amount || amount <= 0) { showToast('⚠️ Fill in label and amount'); return; }
+  state.finance.fixed.push({ id: 'f_' + Date.now(), label, amount, cat, active: true });
+  saveState();
+  closeFinanceModal('fixedModal');
+  document.getElementById('fixedLabel').value = '';
+  document.getElementById('fixedAmt').value = '';
+  showToast(`📌 "${label}" added to fixed`);
+  renderPanels();
+}
+
+function confirmAddDaily() {
+  const label = document.getElementById('dailyLabel').value.trim();
+  const amount = parseFloat(document.getElementById('dailyAmt').value);
+  const cat = document.getElementById('dailyCat').value;
+  if (!label || !amount || amount <= 0) { showToast('⚠️ Fill in label and amount'); return; }
+  state.finance.daily.push({ id: 'd_' + Date.now(), label, amount, cat, date: getTodayKey() });
+  saveState();
+  closeFinanceModal('dailyModal');
+  document.getElementById('dailyLabel').value = '';
+  document.getElementById('dailyAmt').value = '';
+  showToast(`🧾 ₹${amount} logged`);
+  renderPanels();
+}
+
+function deleteFinanceItem(type, id) {
+  if (!confirm('Delete this entry?')) return;
+  if (type === 'income') state.finance.incomes = state.finance.incomes.filter(i => i.id !== id);
+  if (type === 'fixed')  state.finance.fixed   = state.finance.fixed.filter(f => f.id !== id);
+  if (type === 'daily')  state.finance.daily   = state.finance.daily.filter(d => d.id !== id);
+  saveState();
+  showToast('Deleted');
+  renderPanels();
+}
+
+// ═══════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ═══════════════════════════════════════════════════════
+let pushEnabled = false;
+let swReg = null;
+
+async function initPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    swReg = await navigator.serviceWorker.register('/sw.js');
+    const sub = await swReg.pushManager.getSubscription();
+    pushEnabled = !!sub;
+    renderPushBanner();
+  } catch(e) { console.warn('SW register failed:', e); }
+}
+
+async function enablePush() {
+  if (!swReg) return;
+  try {
+    const keyRes = await apiFetch('/vapid-public-key');
+    const vapidKey = keyRes.key;
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { showToast('❌ Notifications blocked'); return; }
+    // Convert VAPID key
+    const raw = atob(vapidKey.replace(/-/g,'+').replace(/_/g,'/'));
+    const key = new Uint8Array(raw.length);
+    for (let i=0;i<raw.length;i++) key[i]=raw.charCodeAt(i);
+
+    const sub = await swReg.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: key
+    });
+    const j = sub.toJSON();
+    await apiFetch('/push/subscribe','POST',{
+      endpoint: j.endpoint,
+      p256dh:   j.keys.p256dh,
+      auth:     j.keys.auth
+    });
+    pushEnabled = true;
+    renderPushBanner();
+    showToast('🔔 Notifications enabled!');
+    // Send test
+    await apiFetch('/push/test','POST',{});
+  } catch(e) { showToast('❌ Push failed: ' + e.message); console.error(e); }
+}
+
+function renderPushBanner() {
+  const el = document.getElementById('pushBanner');
+  if (!el) return;
+  if (pushEnabled) {
+    el.innerHTML = `<div style="font-size:18px">🔔</div>
+      <div class="push-banner-text"><b>Notifications ON</b><br>Hourly task check-ins active</div>
+      <button class="push-enable-btn enabled" onclick="testPush()">TEST</button>`;
+  } else {
+    el.innerHTML = `<div style="font-size:24px">🔕</div>
+      <div class="push-banner-text"><b>Enable Push Notifications</b><br>Get hourly task check-ins on your phone</div>
+      <button class="push-enable-btn" onclick="enablePush()">ENABLE</button>`;
+  }
+}
+
+async function testPush() {
+  await apiFetch('/push/test','POST',{});
+  showToast('📲 Test notification sent!');
+}
+
+// ═══════════════════════════════════════════════════════
+// TASKS
+// ═══════════════════════════════════════════════════════
+let todayTasks = [];
+
+async function loadTasks() {
+  if (!authToken) return;
+  try {
+    const res = await apiFetch('/tasks');
+    todayTasks = res.tasks || [];
+  } catch(e) { console.warn('Task load failed:', e); }
+}
+
+async function createTask(title, priority='medium', detail='') {
+  if (!authToken) return null;
+  const res = await apiFetch('/tasks','POST',{title, priority, detail});
+  await loadTasks();
+  return res.id;
+}
+
+async function cycleTaskStatus(id) {
+  const t = todayTasks.find(t=>t.id===id);
+  if (!t) return;
+  const next = t.status==='pending' ? 'inprogress' : t.status==='inprogress' ? 'done' : 'pending';
+  await apiFetch(`/tasks/${id}`,'PATCH',{status:next});
+  await loadTasks();
+  renderPanels();
+  if (next==='done') showToast('✅ Task done! 🔥');
+}
+
+async function deleteTask(id) {
+  if (!confirm('Delete task?')) return;
+  await apiFetch(`/tasks/${id}`,'DELETE');
+  await loadTasks();
+  renderPanels();
+}
+
+function renderTasksPanel() {
+  const workTasks     = todayTasks.filter(t => t.task_type === 'work');
+  const personalTasks = todayTasks.filter(t => t.task_type !== 'work');
+  const done          = todayTasks.filter(t => t.status === 'done').length;
+  const pct           = todayTasks.length ? Math.round(done/todayTasks.length*100) : 0;
+  const workDone      = workTasks.filter(t=>t.status==='done').length;
+  const persDone      = personalTasks.filter(t=>t.status==='done').length;
+
+  function taskCard(t) {
+    const hasQty   = t.target_qty > 0;
+    const qtyPct   = hasQty ? Math.min(100, Math.round((t.done_qty||0)/t.target_qty*100)) : 0;
+    const qtyColor = qtyPct>=80?'var(--success)':qtyPct>=50?'var(--warn)':'var(--accent2)';
+    const typeIcon = t.task_type==='work' ? '💼' : '🎯';
+    const lastCheckin = taskCheckins[t.id];
+    return `
+    <div style="background:var(--card);border:1px solid ${t.status==='done'?'#1a2a1a':t.status==='inprogress'?'#1a1a2a':'var(--border)'};border-radius:14px;margin-bottom:10px;overflow:hidden">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 14px 10px">
+        <div class="task-check ${t.status}" onclick="cycleTaskStatus('${t.id}')"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;${t.status==='done'?'text-decoration:line-through;color:var(--muted)':''}">${typeIcon} ${t.title}</div>
+          ${t.detail ? `<div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px">${t.detail}</div>` : ''}
+          <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap">
+            <span class="task-pri ${t.priority}">${t.priority.toUpperCase()}</span>
+            ${t.start_time ? `<span style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);padding:2px 6px;border-radius:99px;border:1px solid var(--border)">⏰ ${t.start_time}–${t.deadline||'?'}</span>` : ''}
+            <span style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);padding:2px 6px;border-radius:99px;border:1px solid var(--border)">${t.task_type==='work'?'💼 WORK':'🎯 PERSONAL'}</span>
+          </div>
+        </div>
+        <button class="task-del" onclick="deleteTask('${t.id}')">✕</button>
+      </div>
+
+      <!-- Quantity tracker (if set) -->
+      ${hasQty ? `
+      <div style="padding:0 14px 12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="font-family:'Space Mono',monospace;font-size:11px;color:${qtyColor};font-weight:700">${t.done_qty||0}/${t.target_qty}</div>
+          <div style="flex:1;background:var(--border);border-radius:99px;height:5px;overflow:hidden">
+            <div style="height:100%;background:${qtyColor};border-radius:99px;width:${qtyPct}%;transition:width 0.4s ease"></div>
+          </div>
+          <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">${qtyPct}%</div>
+        </div>
+        <!-- Quick update input -->
+        <div style="display:flex;gap:6px">
+          <input id="qty_${t.id}" type="number" placeholder="Update count..."
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;outline:none"
+            value="${t.done_qty||0}"
+            onkeydown="if(event.key==='Enter')submitCheckin('${t.id}')">
+          <button onclick="submitCheckin('${t.id}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--accent3);color:#000;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer">UPDATE</button>
+        </div>
+        ${lastCheckin ? `<div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--accent4);margin-top:6px;line-height:1.4">🤖 ${lastCheckin}</div>` : ''}
+      </div>` : ''}
+    </div>`;
+  }
+
+  return `
+  <div style="padding:16px 16px 0">
+
+    <!-- Day summary hero -->
+    <div style="background:linear-gradient(135deg,#0d1a0d,#0a0f1a);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:32px;font-weight:800;color:var(--accent);line-height:1">${pct}%</div>
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted)">DONE</div>
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:5px">
+            <span>${done}/${todayTasks.length} TASKS</span>
+            <span>${todayTasks.length-done} LEFT</span>
+          </div>
+          <div style="background:var(--border);border-radius:99px;height:8px;overflow:hidden">
+            <div style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent3));border-radius:99px;width:${pct}%;transition:width 0.5s ease"></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">💼 Work <b style="color:var(--accent3)">${workDone}/${workTasks.length}</b></div>
+            <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">🎯 Personal <b style="color:var(--accent4)">${persDone}/${personalTasks.length}</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD TASK BUTTON -->
+    <button onclick="openAddTaskModal()" style="width:100%;padding:13px;border-radius:12px;border:1px dashed var(--accent);background:transparent;color:var(--accent);font-family:'Space Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:14px;letter-spacing:1px">
+      + ADD TASK
+    </button>
+
+    <!-- WORK TASKS -->
+    ${workTasks.length > 0 ? `
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:8px">💼 OFFICE / WORK TASKS</div>
+    ${workTasks.map(taskCard).join('')}
+    ` : ''}
+
+    <!-- PERSONAL TASKS -->
+    ${personalTasks.length > 0 ? `
+    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:8px;margin-top:${workTasks.length?'6px':'0'}">🎯 PERSONAL TASKS</div>
+    ${personalTasks.map(taskCard).join('')}
+    ` : ''}
+
+    <!-- EMPTY STATE -->
+    ${todayTasks.length===0 ? `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px 24px;text-align:center">
+      <div style="font-size:32px;margin-bottom:10px">📋</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">No tasks yet</div>
+      <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);line-height:1.6">
+        Tap <b style="color:var(--accent)">+ ADD TASK</b> above<br>
+        or go to <b style="color:var(--accent4)">🤖 AI Coach</b> and say<br>
+        "Plan my day" to auto-create tasks
+      </div>
+    </div>` : ''}
+
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- ADD TASK MODAL -->
+  <div id="addTaskModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;align-items:flex-end;justify-content:center">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;animation:slideUp 0.3s ease;max-height:90vh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:800;margin-bottom:16px">📋 Add Task</div>
+
+      <!-- Task type toggle -->
+      <div style="display:flex;background:var(--surface);border-radius:10px;padding:3px;margin-bottom:14px;border:1px solid var(--border)">
+        <button id="typeWork" onclick="setTaskType('work')" style="flex:1;padding:9px;border-radius:8px;border:none;background:var(--accent3);color:#000;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer">💼 WORK</button>
+        <button id="typePersonal" onclick="setTaskType('personal')" style="flex:1;padding:9px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">🎯 PERSONAL</button>
+      </div>
+
+      <input id="newTaskTitle" class="modal-input" placeholder="Task title (e.g. Review 50 PRs)">
+      <input id="newTaskDetail" class="modal-input" placeholder="Details (optional)">
+
+      <!-- Priority -->
+      <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px">PRIORITY</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        ${['high','medium','low'].map(p => `
+          <button id="pri_${p}" onclick="setTaskPri('${p}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:${p==='medium'?'var(--surface)':'transparent'};color:var(--muted);font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.15s">${p==='high'?'🔴':'p'==='medium'?'🟡':'🟢'} ${p.toUpperCase()}</button>
+        `).join('')}
+      </div>
+
+      <!-- Quantity tracking -->
+      <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px">TARGET QUANTITY <span style="color:var(--muted)">(leave 0 if not applicable)</span></div>
+      <input id="newTaskQty" class="modal-input" type="number" placeholder="e.g. 50 (for 50 PRs, 0 for simple task)" value="0">
+
+      <!-- Time -->
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:4px">START TIME</div>
+          <input id="newTaskStart" class="modal-input" type="time" style="margin-bottom:0" value="${new Date().getHours().toString().padStart(2,'0')}:00">
+        </div>
+        <div style="flex:1">
+          <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:4px">DEADLINE</div>
+          <input id="newTaskEnd" class="modal-input" type="time" style="margin-bottom:0" value="18:00">
+        </div>
+      </div>
+
+      <button onclick="confirmAddTask()" style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--accent);color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:8px">ADD TASK</button>
+      <button onclick="closeAddTaskModal()" style="width:100%;padding:10px;background:none;border:none;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">CANCEL</button>
+    </div>
+  </div>`;
+}
+
+// Task modal state
+let newTaskType = 'work';
+let newTaskPri  = 'medium';
+let taskCheckins = {};  // task_id → last AI response
+
+function openAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'flex';
+  setTaskType('work');
+  setTaskPri('medium');
+}
+function closeAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'none';
+}
+function setTaskType(t) {
+  newTaskType = t;
+  const w = document.getElementById('typeWork');
+  const p = document.getElementById('typePersonal');
+  if (!w||!p) return;
+  w.style.background = t==='work' ? 'var(--accent3)' : 'transparent';
+  w.style.color      = t==='work' ? '#000' : 'var(--muted)';
+  p.style.background = t==='personal' ? 'var(--accent4)' : 'transparent';
+  p.style.color      = t==='personal' ? '#fff' : 'var(--muted)';
+}
+function setTaskPri(p) {
+  newTaskPri = p;
+  ['high','medium','low'].forEach(x => {
+    const el = document.getElementById('pri_'+x);
+    if (!el) return;
+    el.style.background = x===p ? (x==='high'?'#1f0a0a':x==='medium'?'#1a1200':'#0a1a0a') : 'transparent';
+    el.style.color = x===p ? (x==='high'?'var(--accent2)':x==='medium'?'var(--warn)':'var(--success)') : 'var(--muted)';
+    el.style.borderColor = x===p ? (x==='high'?'var(--accent2)':x==='medium'?'var(--warn)':'var(--success)') : 'var(--border)';
+  });
+}
+async function confirmAddTask() {
+  const title = document.getElementById('newTaskTitle').value.trim();
+  if (!title) { showToast('⚠️ Enter a task title'); return; }
+  const detail = document.getElementById('newTaskDetail').value.trim();
+  const qty    = parseInt(document.getElementById('newTaskQty').value)||0;
+  const start  = document.getElementById('newTaskStart').value;
+  const end    = document.getElementById('newTaskEnd').value;
+  try {
+    await apiFetch('/tasks','POST',{
+      title, detail,
+      task_type: newTaskType,
+      priority:  newTaskPri,
+      target_qty: qty,
+      start_time: start,
+      deadline:   end,
+      checkin_interval: 60
+    });
+    await loadTasks();
+    closeAddTaskModal();
+    showToast(`✅ Task added! AI manager will check in every hour.`);
+    renderPanels();
+  } catch(e) { showToast('❌ Failed: ' + e.message); }
+}
+
+async function submitCheckin(taskId) {
+  const inp = document.getElementById('qty_'+taskId);
+  if (!inp) return;
+  const qty = parseInt(inp.value)||0;
+  try {
+    const res = await apiFetch(`/tasks/${taskId}/checkin`,'POST',{
+      task_id: taskId, done_qty: qty, note: ''
+    });
+    taskCheckins[taskId] = res.ai_response;
+    await loadTasks();
+    renderPanels();
+    showToast('📊 Progress logged!');
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════
+// AI CHAT
+// ═══════════════════════════════════════════════════════
+let chatMessages = [];   // {role, content, ts}
+let aiThinking   = false;
+
+function buildAIContext() {
+  // Snapshot of today's state for AI context awareness
+  const today = ensureToday();
+  const habitSnap = {};
+  state.habits.forEach(h => { habitSnap[h.name] = today.habits[h.id] ?? null; });
+  const fin = state.finance || {};
+  const s   = typeof calcFinanceSummary === 'function' ? calcFinanceSummary() : {};
+  return {
+    tasks_today:     todayTasks.map(t=>({title:t.title,status:t.status,priority:t.priority})),
+    habits_today:    habitSnap,
+    nofap_days:      typeof getNofapDays === 'function' ? getNofapDays() : 0,
+    finance_summary: { income: s.totalIncome||0, spent: s.totalExpense||0, saved: s.balance||0 }
+  };
+}
+
+async function sendAIMessage(text) {
+  if (!text.trim() || aiThinking || !authToken) return;
+  aiThinking = true;
+  chatMessages.push({role:'user', content:text, ts: Date.now()});
+  renderAIPanel();
+
+  try {
+    const res = await apiFetch('/ai/chat','POST',{
+      message: text,
+      context: buildAIContext()
+    });
+    chatMessages.push({role:'assistant', content:res.reply, ts: Date.now()});
+
+    // Execute any AI actions
+    for (const action of (res.actions||[])) {
+      if (action.type==='create_task') {
+        const d = action.data;
+        await createTask(d.title, d.priority||'medium', d.detail||'');
+        showToast(`📋 Task created: ${d.title}`);
+      } else if (action.type==='update_task') {
+        await apiFetch(`/tasks/${action.data.id}`,'PATCH',{status:action.data.status});
+        await loadTasks();
+        showToast('✅ Task updated by AI');
+      }
+    }
+  } catch(e) {
+    chatMessages.push({role:'assistant', content:'⚠️ AI unavailable. Check server.', ts:Date.now()});
+  }
+  aiThinking = false;
+  renderAIPanel();
+  setTimeout(()=>{
+    const msgs = document.getElementById('aiMessages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  },50);
+}
+
+function renderAIPanel() {
+  const container = document.getElementById('panelsContainer');
+  if (currentSection !== 'ai') return;
+
+  const QUICK = [
+    "Plan my day", "How am I doing?", "Motivate me",
+    "Check my tasks", "Evening review", "I finished a task"
+  ];
+
+  container.innerHTML = `
+  <div class="ai-wrap">
+    <div class="ai-messages" id="aiMessages">
+      ${chatMessages.length===0 ? `
+        <div style="text-align:center;padding:40px 24px">
+          <div style="font-size:42px;margin-bottom:12px">🤖</div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">AI Discipline Coach</div>
+          <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);line-height:1.6">
+            Powered by DeepSeek.<br>Knows your habits, tasks, finance, streak.<br>Tell me your plan for today.
+          </div>
+        </div>
+      ` : chatMessages.map(m => `
+        <div class="ai-bubble ${m.role}">
+          ${m.role==='assistant' ? '<div class="ai-name">🤖 AI COACH</div>' : ''}
+          ${m.content.replace(/\n/g,'<br>')}
+        </div>
+      `).join('')}
+      ${aiThinking ? `<div class="ai-bubble assistant thinking">🤖 thinking...</div>` : ''}
+    </div>
+
+    <div class="ai-quick-btns">
+      ${QUICK.map(q=>`<button class="ai-quick" onclick="quickSend('${q}')">${q}</button>`).join('')}
+    </div>
+
+    <div class="ai-input-row">
+      <textarea class="ai-input" id="aiInput" placeholder="Talk to your AI coach..."
+        rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSendAI()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+      <button class="ai-send" id="aiSendBtn" onclick="doSendAI()" ${aiThinking?'disabled':''}>➤</button>
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    const msgs = document.getElementById('aiMessages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  },50);
+}
+
+function doSendAI() {
+  const inp = document.getElementById('aiInput');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  inp.value = '';
+  inp.style.height = 'auto';
+  sendAIMessage(val);
+}
+
+function quickSend(text) {
+  sendAIMessage(text);
+}
+
+// Generic API fetch helper
+async function apiFetch(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type':'application/json' }
+  };
+  if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  if (body && method !== 'GET') opts.body = JSON.stringify(body);
+  const res = await fetch(window.location.origin + path, opts);
+  if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({detail:'Request failed'}));
+    throw new Error(err.detail||'Error');
+  }
+  if (res.status === 204) return {};
+  return res.json();
+}
+
+// ===== NAV =====
+function showSection(s) {
+  currentSection = s;
+  if (s === 'today') activeTab = activeTab || 'habits';
+  const sections = ['today','ai','finance','stats','settings'];
+  document.querySelectorAll('.nav-btn').forEach((b,i) => {
+    b.classList.toggle('active', sections[i] === s);
+  });
+  renderTabs();
+  if (s === 'ai') {
+    renderAIPanel();
+    loadTasks();
+  } else {
+    renderPanels();
+  }
+  if (s === 'today') {
+    loadTasks().then(()=>renderPanels());
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', async () => {
+  const now = new Date();
+  document.getElementById('headerDate').textContent =
+    now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
+  activeTab = 'habits';
+  await initAuth();
+  renderAll();
+  if (authToken) {
+    await loadTasks();
+    await initPush();
+    renderAll();
+  }
+});
+</script>
+</body>
+</html>
